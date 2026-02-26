@@ -12,7 +12,7 @@ from config import (
     ACCEPTED_ISSUE_TYPES_FOR_UNRESOLVED,
     EXCLUDED_STATUSES,
     EXCLUDED_SERVICE_PREFIXES,
-    FTE_LEGACY_MAPPING_PROJECTS,
+    FTE_NEXTGEN_MAPPING_PROJECTS,
     FTE_TYPE_TO_INQUIRY_TYPE,
     FTE_DIVISION_INQUIRY_MAP,
     FTE_GENERAL_TASK_INQUIRY_MAP,
@@ -139,24 +139,29 @@ def process(df: pd.DataFrame) -> pd.DataFrame:
                 logger.info(f"  '{prefix}' 시스템명 {excluded}건 제외")
 
     # ── 4. 문의유형 매핑 ──
-    # 레거시 프로젝트(FTE_LEGACY_MAPPING_PROJECTS): 업무유형(FTE) 단독 기반(구 방식)
-    # 그 외 프로젝트: 업무구분(FTE) → 업무유형(FTE) 복합 기반(신 방식)
+    # 우선순위:
+    #   1) 업무구분 == "일반 업무" → 프로젝트 무관하게 신 방식 적용
+    #      (일반업무+문의대응 → 1.기능문의 / 그외 → 2.단순조치/운영지원)
+    #   2) 차세대 프로젝트(DX·SAP) + 일반업무 외 → 업무유형 단독 매핑(차세대 방식)
+    #   3) 그 외 프로젝트 + 일반업무 외 → 업무구분 기반 매핑(신 방식)
     def map_inquiry_type(row) -> str:
-        project = str(row.get("프로젝트") or "").strip()
+        project  = str(row.get("프로젝트") or "").strip()
+        division = str(row.get("업무구분(FTE)") or "").strip()
         fte_type = str(row.get("업무유형(FTE)") or "").strip()
 
-        # ── 구 방식: 업무유형 단독 매핑 (레거시 프로젝트) ──
-        if project in FTE_LEGACY_MAPPING_PROJECTS:
+        # ── 1) "일반 업무": 프로젝트 무관하게 신 방식 ──
+        if division == "일반 업무":
+            return FTE_GENERAL_TASK_INQUIRY_MAP.get(fte_type, FTE_GENERAL_TASK_DEFAULT)
+
+        # ── 2) 차세대 프로젝트: 업무유형 단독 매핑 ──
+        if project in FTE_NEXTGEN_MAPPING_PROJECTS:
             if not fte_type:
                 return DEFAULT_INQUIRY_TYPE
             return FTE_TYPE_TO_INQUIRY_TYPE.get(fte_type, DEFAULT_INQUIRY_TYPE)
 
-        # ── 신 방식: 업무구분 기반 매핑 (그 외 프로젝트) ──
-        division = str(row.get("업무구분(FTE)") or "").strip()
+        # ── 3) 신 방식: 업무구분 기반 매핑 ──
         if not division and not fte_type:
             return DEFAULT_INQUIRY_TYPE
-        if division == "일반 업무":
-            return FTE_GENERAL_TASK_INQUIRY_MAP.get(fte_type, FTE_GENERAL_TASK_DEFAULT)
         return FTE_DIVISION_INQUIRY_MAP.get(division, DEFAULT_INQUIRY_TYPE)
 
     df["문의유형"] = df.apply(map_inquiry_type, axis=1)
