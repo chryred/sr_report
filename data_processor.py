@@ -12,7 +12,9 @@ from config import (
     ACCEPTED_ISSUE_TYPES_FOR_UNRESOLVED,
     EXCLUDED_STATUSES,
     EXCLUDED_SERVICE_PREFIXES,
-    FTE_TYPE_TO_INQUIRY_TYPE,
+    FTE_DIVISION_INQUIRY_MAP,
+    FTE_GENERAL_TASK_INQUIRY_MAP,
+    FTE_GENERAL_TASK_DEFAULT,
     DEFAULT_INQUIRY_TYPE,
     INQUIRY_TYPE_ORDER,
     LONG_PENDING_THRESHOLD_DAYS,
@@ -135,13 +137,20 @@ def process(df: pd.DataFrame) -> pd.DataFrame:
                 logger.info(f"  '{prefix}' 시스템명 {excluded}건 제외")
 
     # ── 4. 문의유형 매핑 ──
-    def map_inquiry_type(fte_type):
-        if pd.isna(fte_type) or fte_type is None:
-            return DEFAULT_INQUIRY_TYPE
-        s = str(fte_type).strip()
-        return FTE_TYPE_TO_INQUIRY_TYPE.get(s, DEFAULT_INQUIRY_TYPE)
+    # 업무구분(FTE)을 1차 키로 사용하고, "일반 업무"인 경우 업무유형(FTE)으로 세분화
+    def map_inquiry_type(row) -> str:
+        division = str(row.get("업무구분(FTE)") or "").strip()
+        fte_type = str(row.get("업무유형(FTE)") or "").strip()
 
-    df["문의유형"] = df["업무유형(FTE)"].apply(map_inquiry_type)
+        if not division and not fte_type:
+            return DEFAULT_INQUIRY_TYPE
+
+        if division == "일반 업무":
+            return FTE_GENERAL_TASK_INQUIRY_MAP.get(fte_type, FTE_GENERAL_TASK_DEFAULT)
+
+        return FTE_DIVISION_INQUIRY_MAP.get(division, DEFAULT_INQUIRY_TYPE)
+
+    df["문의유형"] = df.apply(map_inquiry_type, axis=1)
     logger.info(f"  문의유형 매핑 완료: {df['문의유형'].value_counts().to_dict()}")
 
     # ── 5. 평균처리시간 계산 ──
