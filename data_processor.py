@@ -12,6 +12,8 @@ from config import (
     ACCEPTED_ISSUE_TYPES_FOR_UNRESOLVED,
     EXCLUDED_STATUSES,
     EXCLUDED_SERVICE_PREFIXES,
+    FTE_LEGACY_MAPPING_PROJECTS,
+    FTE_TYPE_TO_INQUIRY_TYPE,
     FTE_DIVISION_INQUIRY_MAP,
     FTE_GENERAL_TASK_INQUIRY_MAP,
     FTE_GENERAL_TASK_DEFAULT,
@@ -137,17 +139,24 @@ def process(df: pd.DataFrame) -> pd.DataFrame:
                 logger.info(f"  '{prefix}' 시스템명 {excluded}건 제외")
 
     # ── 4. 문의유형 매핑 ──
-    # 업무구분(FTE)을 1차 키로 사용하고, "일반 업무"인 경우 업무유형(FTE)으로 세분화
+    # 레거시 프로젝트(FTE_LEGACY_MAPPING_PROJECTS): 업무유형(FTE) 단독 기반(구 방식)
+    # 그 외 프로젝트: 업무구분(FTE) → 업무유형(FTE) 복합 기반(신 방식)
     def map_inquiry_type(row) -> str:
-        division = str(row.get("업무구분(FTE)") or "").strip()
+        project = str(row.get("프로젝트") or "").strip()
         fte_type = str(row.get("업무유형(FTE)") or "").strip()
 
+        # ── 구 방식: 업무유형 단독 매핑 (레거시 프로젝트) ──
+        if project in FTE_LEGACY_MAPPING_PROJECTS:
+            if not fte_type:
+                return DEFAULT_INQUIRY_TYPE
+            return FTE_TYPE_TO_INQUIRY_TYPE.get(fte_type, DEFAULT_INQUIRY_TYPE)
+
+        # ── 신 방식: 업무구분 기반 매핑 (그 외 프로젝트) ──
+        division = str(row.get("업무구분(FTE)") or "").strip()
         if not division and not fte_type:
             return DEFAULT_INQUIRY_TYPE
-
         if division == "일반 업무":
             return FTE_GENERAL_TASK_INQUIRY_MAP.get(fte_type, FTE_GENERAL_TASK_DEFAULT)
-
         return FTE_DIVISION_INQUIRY_MAP.get(division, DEFAULT_INQUIRY_TYPE)
 
     df["문의유형"] = df.apply(map_inquiry_type, axis=1)

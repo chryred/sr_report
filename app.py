@@ -121,6 +121,40 @@ def _metric_card(label: str, value, sub: str = "") -> str:
     """
 
 
+def _make_summary_count_pct_df(total: dict, monthly: dict) -> pd.DataFrame:
+    """SR 건수 집계(요약) — 건수·% 2행 DataFrame 생성 (전체 + 당월)"""
+
+    def _pct(v: int, t: int) -> str:
+        return f"{round(v / t * 100, 1)}%" if t > 0 else "0%"
+
+    t = total["합계"]
+    m = monthly["합계"]
+    return pd.DataFrame([
+        {
+            "구분": "건수",
+            "전체_미접수": total["미접수"],
+            "전체_접수": total["접수"],
+            "전체_완료": total["완료"],
+            "전체_합계": t,
+            "당월_미접수": monthly["미접수"],
+            "당월_접수": monthly["접수"],
+            "당월_완료": monthly["완료"],
+            "당월_합계": m,
+        },
+        {
+            "구분": "%",
+            "전체_미접수": _pct(total["미접수"], t),
+            "전체_접수": _pct(total["접수"], t),
+            "전체_완료": _pct(total["완료"], t),
+            "전체_합계": "100%",
+            "당월_미접수": _pct(monthly["미접수"], m),
+            "당월_접수": _pct(monthly["접수"], m),
+            "당월_완료": _pct(monthly["완료"], m),
+            "당월_합계": "100%",
+        },
+    ])
+
+
 # ────────────────────────────────────────────────────────────
 # 사이드바
 # ────────────────────────────────────────────────────────────
@@ -350,6 +384,16 @@ with tab1:
             st.markdown(_metric_card(label, value, sub), unsafe_allow_html=True)
 
     st.write("")
+
+    # ── SR 건수 집계(요약) 테이블: 전체 · 당월 건수 + % ──
+    st.markdown('<div class="section-title">■ SR 건수 집계(요약)</div>', unsafe_allow_html=True)
+    st.dataframe(
+        _make_summary_count_pct_df(total, monthly),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.write("")
     st.divider()
 
     # ── 차트 영역 ──
@@ -505,6 +549,22 @@ with tab2:
         total_row[f"{short}_완료"] = int(tc.get("완료", 0))
         total_row[f"{short}_합계"] = len(df_t)
     rows.append(total_row)
+
+    # ── % 행 (총합계 대비) ──
+    grand_total = total_row["합계"]
+
+    def _pct_str(v: int) -> str:
+        return f"{round(v / grand_total * 100, 1)}%" if grand_total > 0 else "0%"
+
+    pct_row: dict = {"시스템명": "%"}
+    for key in ["미접수", "접수", "완료", "합계"]:
+        pct_row[key] = _pct_str(total_row[key])
+    for itype in INQUIRY_TYPE_ORDER:
+        short = itype.split(". ", 1)[-1]
+        for key in ["미접수", "접수", "완료", "합계"]:
+            col_key = f"{short}_{key}"
+            pct_row[col_key] = _pct_str(total_row.get(col_key, 0))
+    rows.append(pct_row)
 
     detail_df = pd.DataFrame(rows)
     st.dataframe(detail_df, use_container_width=True, hide_index=True)

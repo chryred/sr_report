@@ -316,6 +316,40 @@ def _write_detail_sheet(wb: Workbook, df: pd.DataFrame, stats: dict, project_nam
         _apply_cell_style(c, FONT_HEADER_BLACK, TOTAL_FILL, CENTER, THIN_BORDER)
         col += 1
 
+    # ── % 행 (총합계 대비 비율) ──
+    row += 1
+    grand_total = len(df)
+    ws.cell(row=row, column=1, value="%")
+    _apply_cell_style(ws.cell(row=row, column=1), FONT_NORMAL, TOTAL_FILL, CENTER, THIN_BORDER)
+
+    col = 2
+    # 요약 % (미접수 / 접수 / 완료 각각 전체 대비)
+    for status in PROCESS_STATUS_ORDER:
+        val = int(total_status.get(status, 0))
+        pct = f"{round(val / grand_total * 100, 1)}%" if grand_total > 0 else "-"
+        c = ws.cell(row=row, column=col, value=pct)
+        _apply_cell_style(c, FONT_NORMAL, TOTAL_FILL, CENTER, THIN_BORDER)
+        col += 1
+    c = ws.cell(row=row, column=col, value="100%")
+    _apply_cell_style(c, FONT_NORMAL, TOTAL_FILL, CENTER, THIN_BORDER)
+    col += 1
+
+    # 문의유형별 %
+    for itype in INQUIRY_TYPE_ORDER:
+        df_type_pct = df[df["문의유형"] == itype]
+        type_status_pct = df_type_pct["처리상태"].value_counts()
+        for status in PROCESS_STATUS_ORDER:
+            val = int(type_status_pct.get(status, 0))
+            pct = f"{round(val / grand_total * 100, 1)}%" if grand_total > 0 else "-"
+            c = ws.cell(row=row, column=col, value=pct)
+            _apply_cell_style(c, FONT_NORMAL, TOTAL_FILL, CENTER, THIN_BORDER)
+            col += 1
+        type_total_pct = len(df_type_pct)
+        pct = f"{round(type_total_pct / grand_total * 100, 1)}%" if grand_total > 0 else "-"
+        c = ws.cell(row=row, column=col, value=pct)
+        _apply_cell_style(c, FONT_NORMAL, TOTAL_FILL, CENTER, THIN_BORDER)
+        col += 1
+
     # 컬럼 너비
     ws.column_dimensions["A"].width = 28
     for c in range(2, col):
@@ -399,11 +433,24 @@ def _write_summary_sheet(
         _apply_cell_style(cell, FONT_NORMAL, alignment=CENTER, border=THIN_BORDER)
     row += 1
 
-    # % 행
+    # % 행 (각 항목 / 해당 합계)
     ws.cell(row=row, column=1, value="%")
     _apply_cell_style(ws.cell(row=row, column=1), FONT_HEADER_BLACK, HEADER_FILL_GRAY, CENTER, THIN_BORDER)
-    for i in range(2, 10):
-        _apply_cell_style(ws.cell(row=row, column=i), FONT_NORMAL, alignment=CENTER, border=THIN_BORDER)
+    t_sum = total["합계"]
+    m_sum = monthly["합계"]
+    pct_vals = [
+        f"{round(total['미접수'] / t_sum * 100, 1)}%" if t_sum > 0 else "-",
+        f"{round(total['접수']   / t_sum * 100, 1)}%" if t_sum > 0 else "-",
+        f"{round(total['완료']   / t_sum * 100, 1)}%" if t_sum > 0 else "-",
+        "100%",
+        f"{round(monthly['미접수'] / m_sum * 100, 1)}%" if m_sum > 0 else "-",
+        f"{round(monthly['접수']   / m_sum * 100, 1)}%" if m_sum > 0 else "-",
+        f"{round(monthly['완료']   / m_sum * 100, 1)}%" if m_sum > 0 else "-",
+        "100%",
+    ]
+    for i, v in enumerate(pct_vals, 2):
+        cell = ws.cell(row=row, column=i, value=v)
+        _apply_cell_style(cell, FONT_NORMAL, alignment=CENTER, border=THIN_BORDER)
     row += 1
 
     # 접수율/처리율 텍스트
