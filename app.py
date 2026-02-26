@@ -3,6 +3,7 @@
 import io
 import os
 import sys
+import tempfile
 from datetime import datetime
 
 import pandas as pd
@@ -65,12 +66,17 @@ INQUIRY_COLORS = [
 @st.cache_data(show_spinner=False)
 def _load_excel(file_bytes: bytes, filename: str) -> pd.DataFrame:
     """업로드된 Excel 파일을 DataFrame으로 로드"""
-    with io.BytesIO(file_bytes) as buf:
-        # 임시 파일로 저장 후 로드
-        tmp = f"/tmp/{filename}"
-        with open(tmp, "wb") as f:
-            f.write(buf.read())
-        return load_from_excel(tmp)
+    suffix = os.path.splitext(filename)[-1] or ".xlsx"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_f:
+        tmp_f.write(file_bytes)
+        tmp_path = tmp_f.name
+    try:
+        return load_from_excel(tmp_path)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 @st.cache_data(show_spinner=False)
@@ -88,14 +94,21 @@ def _make_excel_bytes(
     selected_projects: list = None,
 ) -> bytes:
     """Excel 리포트를 메모리에서 생성하여 bytes 반환"""
-    tmp_path = f"/tmp/SR_Report_{report_month}.xlsx"
-    generate_report(
-        df, stats, team_name, report_month,
-        output_path=tmp_path,
-        selected_projects=selected_projects,
-    )
-    with open(tmp_path, "rb") as f:
-        return f.read()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_f:
+        tmp_path = tmp_f.name
+    try:
+        generate_report(
+            df, stats, team_name, report_month,
+            output_path=tmp_path,
+            selected_projects=selected_projects,
+        )
+        with open(tmp_path, "rb") as f:
+            return f.read()
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 def _metric_card(label: str, value, sub: str = "") -> str:
