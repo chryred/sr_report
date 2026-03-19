@@ -17,6 +17,7 @@ from config import (
     FTE_DIVISION_INQUIRY_MAP,
     FTE_GENERAL_TASK_INQUIRY_MAP,
     FTE_GENERAL_TASK_DEFAULT,
+    ISSUE_TYPE_NO_DIVISION_INQUIRY_MAP,
     DEFAULT_INQUIRY_TYPE,
     INQUIRY_TYPE_ORDER,
     LONG_PENDING_THRESHOLD_DAYS,
@@ -156,11 +157,19 @@ def process(df: pd.DataFrame) -> pd.DataFrame:
         # ── 2) 차세대 프로젝트: 업무유형 단독 매핑 ──
         if project in FTE_NEXTGEN_MAPPING_PROJECTS:
             if not fte_type:
+                issue_type = str(row.get("이슈 유형") or "").strip()
+                if issue_type in ISSUE_TYPE_NO_DIVISION_INQUIRY_MAP:
+                    return ISSUE_TYPE_NO_DIVISION_INQUIRY_MAP[issue_type]
                 return DEFAULT_INQUIRY_TYPE
             return FTE_TYPE_TO_INQUIRY_TYPE.get(fte_type, DEFAULT_INQUIRY_TYPE)
 
         # ── 3) 신 방식: 업무구분 기반 매핑 ──
-        if not division and not fte_type:
+        if not division:
+            # 업무구분이 없고 이슈 유형이 매핑 테이블에 있으면 이슈 유형 기반 매핑
+            # 예: 이슈 유형 "변경관리" → "4. 신규개발 및 개선"
+            issue_type = str(row.get("이슈 유형") or "").strip()
+            if issue_type in ISSUE_TYPE_NO_DIVISION_INQUIRY_MAP:
+                return ISSUE_TYPE_NO_DIVISION_INQUIRY_MAP[issue_type]
             return DEFAULT_INQUIRY_TYPE
         return FTE_DIVISION_INQUIRY_MAP.get(division, DEFAULT_INQUIRY_TYPE)
 
