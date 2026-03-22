@@ -4,6 +4,6 @@ __pycache__/
 *.pyc
 .DS_Store
 .claude/
-.python-version
 *.xlsx
+.python-version
 venv/

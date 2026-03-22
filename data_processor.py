@@ -15,6 +15,7 @@ from config import (
     FTE_NEXTGEN_MAPPING_PROJECTS,
     FTE_TYPE_TO_INQUIRY_TYPE,
     FTE_DIVISION_INQUIRY_MAP,
+    FTE_DIVISION_TYPE_OVERRIDES,
     FTE_GENERAL_TASK_INQUIRY_MAP,
     FTE_GENERAL_TASK_DEFAULT,
     ISSUE_TYPE_NO_DIVISION_INQUIRY_MAP,
@@ -166,11 +167,15 @@ def process(df: pd.DataFrame) -> pd.DataFrame:
         # ── 3) 신 방식: 업무구분 기반 매핑 ──
         if not division:
             # 업무구분이 없고 이슈 유형이 매핑 테이블에 있으면 이슈 유형 기반 매핑
-            # 예: 이슈 유형 "변경관리" → "4. 신규개발 및 개선"
+            # 예: 이슈 유형 "변경관리" → "6. 신규개발 및 개선"
             issue_type = str(row.get("이슈 유형") or "").strip()
             if issue_type in ISSUE_TYPE_NO_DIVISION_INQUIRY_MAP:
                 return ISSUE_TYPE_NO_DIVISION_INQUIRY_MAP[issue_type]
             return DEFAULT_INQUIRY_TYPE
+        # 업무구분+업무유형 조합 오버라이드 확인 (운영 업무·정기 업무 지원·품질관리 등)
+        type_overrides = FTE_DIVISION_TYPE_OVERRIDES.get(division, {})
+        if fte_type and fte_type in type_overrides:
+            return type_overrides[fte_type]
         return FTE_DIVISION_INQUIRY_MAP.get(division, DEFAULT_INQUIRY_TYPE)
 
     df["문의유형"] = df.apply(map_inquiry_type, axis=1)
